@@ -90,7 +90,7 @@ int main() {
             }
         }
         else {
-            slowPrint("\n Master will now  move...");
+            slowPrint("\n Master will now make his move...");
             this_thread::sleep_for(chrono::milliseconds(800));
 
             bool shootPlayer = chance(gen) > 0.5;
