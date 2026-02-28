@@ -79,7 +79,7 @@ int main() {
         cout << "\nBullets left: " << magazine.size() << endl;
 
         if (playerTurn) {
-            slowPrint("\nChoose your move:");
+            slowPrint("\n Choose your move:");
             slowPrint("1 — Shoot yourself");
             slowPrint("2 — Shoot master");
 
@@ -96,12 +96,12 @@ int main() {
                     dealerAlive = false;
             }
             else {
-                slowPrint("Wrong move");
+                slowPrint(" Wrong move");
                 continue;
             }
         }
         else {
-            slowPrint("\nMaster move...");
+            slowPrint("\n Master will now  move...");
             this_thread::sleep_for(chrono::milliseconds(800));
 
             bool shootPlayer = chance(gen) > 0.5;
