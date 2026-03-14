@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="BuckshotCli.vcxproj" />
+  <Project Path="BuckshotCli.vcxproj" Id="b2eddec7-7b9a-47de-849c-04a7986446a8" />
 </Solution>

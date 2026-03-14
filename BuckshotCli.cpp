@@ -7,111 +7,255 @@
 
 using namespace std;
 
-void slowPrint(const string& text, int delay = 25) {
-    for (char c : text) {
+struct Player {
+    int hp = 3;
+
+    bool saw = true;
+    bool cigarette = true;
+    bool magnifier = true;
+    bool handcuffs = true;
+    bool beer = true;
+    bool adrenaline = true;
+    bool phone = true;
+    bool pills = true;
+};
+
+void pause(int ms)
+{
+    this_thread::sleep_for(chrono::milliseconds(ms));
+}
+
+void slowPrint(string text)
+{
+    for (char c : text)
+    {
         cout << c << flush;
-        this_thread::sleep_for(chrono::milliseconds(delay));
+        pause(10);
     }
     cout << endl;
 }
 
-vector<string> createMagazine() {
-    random_device rd;
-    mt19937 gen(rd());
+void drawUI(int playerHP, int dealerHP, int shells, int money, int round)
+{
+    cout << "\n---------------------------------\n";
+    cout << "        BUCKSHOT ROULETTE        \n";
+    cout << "---------------------------------\n";
+    cout << "Round     : " << round << endl;
+    cout << "Money     : " << money << endl;
+    cout << "Player HP : " << playerHP << endl;
+    cout << "Dealer HP : " << dealerHP << endl;
+    cout << "Shells    : " << shells << endl;
+    cout << "---------------------------------\n";
+}
+
+vector<string> reloadMagazine(mt19937& gen)
+{
     uniform_int_distribution<> dist(1, 3);
 
     int live = dist(gen);
     int blank = dist(gen);
 
-    vector<string> magazine;
-    magazine.insert(magazine.end(), live, "LIVE");
-    magazine.insert(magazine.end(), blank, "BLANK");
+    vector<string> mag;
 
-    shuffle(magazine.begin(), magazine.end(), gen);
-    return magazine;
+    mag.insert(mag.end(), live, "LIVE");
+    mag.insert(mag.end(), blank, "BLANK");
+
+    shuffle(mag.begin(), mag.end(), gen);
+
+    slowPrint("Dealer loads the shotgun...");
+    pause(700);
+
+    slowPrint("Magazine ready.");
+
+    return mag;
 }
 
-bool shoot(const string& target, vector<string>& magazine) {
-    if (magazine.empty()) {
-        slowPrint("No Bullets left");
-        return false;
-    }
+bool shoot(Player& target, vector<string>& mag, bool doubleDamage)
+{
+    string bullet = mag.front();
+    mag.erase(mag.begin());
 
-    string bullet = magazine.front();
-    magazine.erase(magazine.begin());
+    slowPrint("Shot fired...");
+    pause(600);
 
-    slowPrint("Shoot... (" + bullet + ")");
+    if (bullet == "LIVE")
+    {
+        int dmg = doubleDamage ? 2 : 1;
+        target.hp -= dmg;
 
-    if (bullet == "LIVE") {
-        slowPrint("💥 " + target + " dead.");
+        cout << "LIVE round. Damage " << dmg << endl;
         return true;
     }
-    else {
-        slowPrint("Blank shoot.");
+    else
+    {
+        cout << "Blank round\n";
         return false;
     }
 }
 
-int main() {
-    slowPrint("Bullets Roulette CLI in C++\n");
+void resetPlayer(Player& p)
+{
+    p.hp = 3;
+    p.saw = true;
+    p.cigarette = true;
+    p.magnifier = true;
+    p.handcuffs = true;
+}
 
-    vector<string> magazine = createMagazine();
-    bool playerAlive = true;
-    bool dealerAlive = true;
-    bool playerTurn = true;
-
+int main()
+{
     random_device rd;
     mt19937 gen(rd());
-    uniform_real_distribution<> chance(0.0, 1.0);
 
-    while (playerAlive && dealerAlive) {
-        cout << "\nBullets left: " << magazine.size() << endl;
+    int money = 200;
+    int round = 1;
 
-        if (playerTurn) {
-            slowPrint("\n Choose your move:");
-            slowPrint("1 — Shoot yourself");
-            slowPrint("2 — Shoot master");
+    slowPrint("Welcome to Buckshot Roulette.");
 
-            int choice;
-            cout << "> ";
-            cin >> choice;
+    while (money > 0)
+    {
+        Player player;
+        Player dealer;
 
-            if (choice == 1) {
-                if (shoot("You", magazine))
-                    playerAlive = false;
+        vector<string> magazine = reloadMagazine(gen);
+
+        bool playerTurn = true;
+        bool dealerSkip = false;
+
+        slowPrint("\nStarting round " + to_string(round));
+
+        while (player.hp > 0 && dealer.hp > 0)
+        {
+            if (magazine.empty())
+                magazine = reloadMagazine(gen);
+
+            drawUI(player.hp, dealer.hp, magazine.size(), money, round);
+
+            if (playerTurn)
+            {
+                cout << "1 - Shoot dealer\n";
+                cout << "2 - Shoot yourself\n";
+                cout << "3 - Use item\n";
+
+                int choice;
+                cin >> choice;
+
+                if (choice == 3)
+                {
+                    cout << "Items:\n";
+                    if (player.saw) cout << "1 Saw\n";
+                    if (player.cigarette) cout << "2 Cigarette\n";
+                    if (player.magnifier) cout << "3 Magnifier\n";
+                    if (player.handcuffs) cout << "4 Handcuffs\n";
+
+                    int item;
+                    cin >> item;
+
+                    if (item == 1 && player.saw)
+                    {
+                        player.saw = false;
+                        shoot(dealer, magazine, true);
+                    }
+
+                    else if (item == 2 && player.cigarette)
+                    {
+                        player.cigarette = false;
+                        player.hp++;
+                        slowPrint("HP +1");
+                        continue;
+                    }
+
+                    else if (item == 3 && player.magnifier)
+                    {
+                        player.magnifier = false;
+                        cout << "Next shell: " << magazine.front() << endl;
+                        continue;
+                    }
+
+                    else if (item == 4 && player.handcuffs)
+                    {
+                        player.handcuffs = false;
+                        dealerSkip = true;
+                        slowPrint("Dealer restrained.");
+                        continue;
+                    }
+
+                    else
+                    {
+                        slowPrint("Item unavailable.");
+                        continue;
+                    }
+                }
+
+                else if (choice == 1)
+                {
+                    shoot(dealer, magazine, false);
+                }
+
+                else if (choice == 2)
+                {
+                    shoot(player, magazine, false);
+                }
+
+                else
+                {
+                    slowPrint("Invalid input.");
+                    continue;
+                }
             }
-            else if (choice == 2) {
-                if (shoot("Master", magazine))
-                    dealerAlive = false;
+
+            else
+            {
+                if (dealerSkip)
+                {
+                    slowPrint("Dealer skips turn.");
+                    dealerSkip = false;
+                }
+                else
+                {
+                    slowPrint("Dealer thinking...");
+                    pause(800);
+
+                    bool shootPlayer = true;
+
+                    if (magazine.front() == "BLANK")
+                        shootPlayer = false;
+
+                    if (shootPlayer)
+                        shoot(player, magazine, false);
+                    else
+                        shoot(dealer, magazine, false);
+                }
             }
-            else {
-                slowPrint(" Wrong move");
-                continue;
-            }
+
+            playerTurn = !playerTurn;
         }
-        else {
-            slowPrint("\n Master will now make his move...");
-            this_thread::sleep_for(chrono::milliseconds(800));
 
-            bool shootPlayer = chance(gen) > 0.5;
-            if (shootPlayer) {
-                if (shoot("You", magazine))
-                    playerAlive = false;
-            }
-            else {
-                if (shoot("Master", magazine))
-                    dealerAlive = false;
-            }
+        if (player.hp > 0)
+        {
+            slowPrint("Round won.");
+            money += 100;
+        }
+        else
+        {
+            slowPrint("Round lost.");
+            money -= 50;
         }
 
-        playerTurn = !playerTurn;
+        round++;
+
+        cout << "Current money: " << money << endl;
+
+        if (money <= 0)
+        {
+            slowPrint("\nYou are out of money.");
+            slowPrint("Game over.");
+            break;
+        }
+
+        slowPrint("\nNext round starting...");
+        pause(1500);
     }
-
-    slowPrint("\nEnd of game");
-    if (playerAlive)
-        slowPrint("You win!");
-    else
-        slowPrint("You dead!");
 
     return 0;
 }
