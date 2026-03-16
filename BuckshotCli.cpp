@@ -14,11 +14,15 @@ using namespace std;
 #define RED "\033[31m"
 #define GREEN "\033[32m"
 #define YELLOW "\033[33m"
-#define CYAN "\033[36m"
-#define GRAY "\033[90m"
 #define BLUE "\033[34m"
+#define GRAY "\033[90m"
 
-/* PAUSE */
+/* CONSTANTS */
+
+const int MAX_HP = 4;
+const int MAX_ITEMS = 5;
+
+/* DELAY */
 
 void pauseMs(int ms)
 {
@@ -32,31 +36,17 @@ vector<string> gameLog;
 void addLog(string s)
 {
     gameLog.push_back(s);
+
     if (gameLog.size() > 10)
         gameLog.erase(gameLog.begin());
 }
 
 void drawLog()
 {
-    cout << "\n" << BLUE << "------ Game Log ------" << RESET << "\n";
+    cout << "\n" << BLUE << "---- LOG ----" << RESET << endl;
+
     for (string& s : gameLog)
         cout << s << endl;
-}
-
-/* DEALER PHRASES */
-
-vector<string> dealerLines =
-{
-"Dealer: Let's see...",
-"Dealer: Your move.",
-"Dealer: Interesting...",
-"Dealer: Feeling lucky?"
-};
-
-void dealerSpeak(mt19937& gen)
-{
-    uniform_int_distribution<> dist(0, dealerLines.size() - 1);
-    cout << YELLOW << dealerLines[dist(gen)] << RESET << endl;
 }
 
 /* PLAYER */
@@ -67,29 +57,65 @@ struct Player
     vector<string> inventory;
 };
 
-/* ITEMS */
+/* ITEM DROP BALANCE */
 
-vector<string> allItems =
+struct ItemDrop
 {
-"Saw",
-"Cigarette",
-"Magnifier",
-"Handcuffs",
-"Beer",
-"Phone",
-"Pills",
-"Inverter"
+    string name;
+    int weight;
 };
+
+vector<ItemDrop> itemPool =
+{
+    {"Saw",10},
+    {"Cigarette",20},
+    {"Magnifier",15},
+    {"Beer",15},
+    {"Handcuffs",10},
+    {"Phone",5},
+    {"Pills",10},
+    {"Inverter",5}
+};
+
+/* RANDOM ITEM */
+
+string randomItem(mt19937& gen)
+{
+    int total = 0;
+
+    for (auto& i : itemPool)
+        total += i.weight;
+
+    uniform_int_distribution<> dist(1, total);
+
+    int r = dist(gen);
+
+    int sum = 0;
+
+    for (auto& i : itemPool)
+    {
+        sum += i.weight;
+
+        if (r <= sum)
+            return i.name;
+    }
+
+    return "Cigarette";
+}
+
+/* GIVE ITEMS */
 
 void giveRandomItems(Player& p, mt19937& gen)
 {
     uniform_int_distribution<> countDist(2, 4);
-    uniform_int_distribution<> itemDist(0, allItems.size() - 1);
 
     int count = countDist(gen);
 
     for (int i = 0; i < count; i++)
-        p.inventory.push_back(allItems[itemDist(gen)]);
+    {
+        if (p.inventory.size() < MAX_ITEMS)
+            p.inventory.push_back(randomItem(gen));
+    }
 }
 
 /* MAGAZINE */
@@ -98,47 +124,29 @@ vector<string> reloadMagazine(mt19937& gen)
 {
     vector<string> mag;
 
-    for (int i = 0; i < 3; i++) mag.push_back("LIVE");
-    for (int i = 0; i < 4; i++) mag.push_back("BLANK");
+    for (int i = 0; i < 3; i++)
+        mag.push_back("LIVE");
+
+    for (int i = 0; i < 4; i++)
+        mag.push_back("BLANK");
 
     shuffle(mag.begin(), mag.end(), gen);
 
-    addLog("Shotgun loaded");
+    addLog("Dealer loaded shotgun");
 
     return mag;
 }
 
-/* MAGAZINE VIEW */
+/* DRAW MAGAZINE */
 
 void drawMagazine(int size)
 {
     cout << "\nShells: [ ";
+
     for (int i = 0; i < size; i++)
         cout << "? ";
+
     cout << "]\n";
-}
-
-/* SHOOT */
-
-bool shoot(Player& target, vector<string>& mag, bool doubleDamage)
-{
-    string bullet = mag.front();
-    mag.erase(mag.begin());
-
-    cout << "\nclick...\n";
-    pauseMs(500);
-    cout << RED << "BOOM\n" << RESET;
-
-    if (bullet == "LIVE")
-    {
-        int dmg = doubleDamage ? 2 : 1;
-        target.hp -= dmg;
-        addLog("LIVE round damage " + to_string(dmg));
-        return true;
-    }
-
-    addLog("Blank round");
-    return false;
 }
 
 /* DEALER MEMORY */
@@ -147,26 +155,67 @@ vector<string> dealerMemory;
 
 void initDealerMemory(int size)
 {
-    dealerMemory.clear();
-    for (int i = 0; i < size; i++)
-        dealerMemory.push_back("?");
+    dealerMemory.assign(size, "?");
 }
 
-void updateDealerMemory(int index, string value)
+void rememberShell(int index, string value)
 {
     if (index < dealerMemory.size())
         dealerMemory[index] = value;
 }
 
+void shiftDealerMemory()
+{
+    if (!dealerMemory.empty())
+        dealerMemory.erase(dealerMemory.begin());
+}
+
+/* SHOOT */
+
+bool shoot(Player& target, vector<string>& mag, bool& doubleDamage)
+{
+    string bullet = mag.front();
+    mag.erase(mag.begin());
+
+    cout << "\nclick...\n";
+    pauseMs(500);
+
+    cout << RED << "BOOM\n" << RESET;
+
+    if (bullet == "LIVE")
+    {
+        int dmg = doubleDamage ? 2 : 1;
+
+        target.hp -= dmg;
+
+        addLog("LIVE round damage " + to_string(dmg));
+    }
+    else
+    {
+        addLog("Blank round");
+    }
+
+    doubleDamage = false;
+
+    shiftDealerMemory();
+
+    return bullet == "LIVE";
+}
+
 /* ITEMS */
 
-void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, bool& doubleDamage, bool& skip)
+void useItem(Player& player,
+    string item,
+    vector<string>& mag,
+    mt19937& gen,
+    bool& doubleDamage,
+    bool& skip)
 {
 
     if (item == "Cigarette")
     {
-        player.hp++;
-        addLog("HP +1");
+        player.hp = min(player.hp + 1, MAX_HP);
+        addLog("Cigarette +1 HP");
     }
 
     if (item == "Magnifier")
@@ -174,6 +223,9 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
         if (!mag.empty())
         {
             cout << "Next shell: " << mag.front() << endl;
+
+            rememberShell(0, mag.front());
+
             addLog("Magnifier used");
         }
     }
@@ -182,15 +234,18 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
     {
         if (!mag.empty())
         {
+            addLog("Beer removed shell");
+
             mag.erase(mag.begin());
-            addLog("Shell removed");
+
+            shiftDealerMemory();
         }
     }
 
     if (item == "Saw")
     {
         doubleDamage = true;
-        addLog("Double damage ready");
+        addLog("Saw: double damage ready");
     }
 
     if (item == "Handcuffs")
@@ -202,8 +257,14 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
     if (item == "Phone")
     {
         cout << "Next shells: ";
+
         for (int i = 0; i < 2 && i < mag.size(); i++)
+        {
             cout << mag[i] << " ";
+
+            rememberShell(i, mag[i]);
+        }
+
         cout << endl;
 
         addLog("Phone used");
@@ -211,17 +272,17 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
 
     if (item == "Pills")
     {
-        uniform_int_distribution<>dist(0, 1);
+        uniform_int_distribution<> dist(0, 1);
 
         if (dist(gen))
         {
-            player.hp += 2;
-            addLog("Pills heal");
+            player.hp = min(player.hp + 2, MAX_HP);
+            addLog("Pills healed +2");
         }
         else
         {
             player.hp--;
-            addLog("Pills side effect");
+            addLog("Pills side effect -1");
         }
     }
 
@@ -234,6 +295,8 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
             else
                 mag.front() = "LIVE";
 
+            rememberShell(0, mag.front());
+
             addLog("Shell inverted");
         }
     }
@@ -242,9 +305,8 @@ void useItem(Player& player, string item, vector<string>& mag, mt19937& gen, boo
 
 /* DEALER AI */
 
-bool dealerAI(vector<string>& mag)
+bool dealerShouldShootPlayer(vector<string>& mag)
 {
-
     if (!dealerMemory.empty())
     {
         if (dealerMemory[0] == "LIVE")
@@ -254,7 +316,8 @@ bool dealerAI(vector<string>& mag)
             return false;
     }
 
-    int live = 0, blank = 0;
+    int live = 0;
+    int blank = 0;
 
     for (string s : mag)
     {
@@ -264,10 +327,48 @@ bool dealerAI(vector<string>& mag)
 
     double chance = (double)live / (live + blank);
 
-    if (chance > 0.6) return true;
-    if (chance < 0.4) return false;
+    if (chance > 0.65)
+        return true;
+
+    if (chance < 0.35)
+        return false;
 
     return rand() % 2;
+}
+
+/* DEALER ITEM USE */
+
+void dealerUseItem(Player& dealer,
+    vector<string>& mag,
+    mt19937& gen,
+    bool& doubleDamage)
+{
+    for (int i = 0; i < dealer.inventory.size(); i++)
+    {
+        string item = dealer.inventory[i];
+
+        if (item == "Magnifier")
+        {
+            rememberShell(0, mag.front());
+
+            addLog("Dealer used Magnifier");
+
+            dealer.inventory.erase(dealer.inventory.begin() + i);
+
+            return;
+        }
+
+        if (item == "Saw")
+        {
+            doubleDamage = true;
+
+            addLog("Dealer used Saw");
+
+            dealer.inventory.erase(dealer.inventory.begin() + i);
+
+            return;
+        }
+    }
 }
 
 /* MAIN */
@@ -284,7 +385,7 @@ int main()
     while (money > 0)
     {
 
-        cout << "\nMoney: " << money << endl;
+        cout << "\nMoney: " << money << "\n";
         cout << "Place bet: ";
 
         int bet;
@@ -296,13 +397,13 @@ int main()
         Player player;
         Player dealer;
 
-        bool doubleDamage = false;
-        bool dealerSkip = false;
-
         giveRandomItems(player, gen);
         giveRandomItems(dealer, gen);
 
-        vector<string>magazine = reloadMagazine(gen);
+        bool doubleDamage = false;
+        bool dealerSkip = false;
+
+        vector<string> magazine = reloadMagazine(gen);
 
         initDealerMemory(magazine.size());
 
@@ -311,11 +412,10 @@ int main()
         while (player.hp > 0 && dealer.hp > 0 && !magazine.empty())
         {
 
-            cout << "\n========================\n";
-            cout << "Round " << round << " Bet " << bet << endl;
+            cout << "\n========== ROUND " << round << " ==========\n";
 
-            cout << "Player HP " << player.hp << endl;
-            cout << "Dealer HP " << dealer.hp << endl;
+            cout << "Player HP " << player.hp << "\n";
+            cout << "Dealer HP " << dealer.hp << "\n";
 
             drawMagazine(magazine.size());
 
@@ -351,16 +451,15 @@ int main()
 
                     if (id >= 0 && id < player.inventory.size())
                     {
-
                         string item = player.inventory[id];
 
                         useItem(player, item, magazine, gen, doubleDamage, dealerSkip);
 
                         player.inventory.erase(player.inventory.begin() + id);
-
                     }
 
                     continue;
+
                 }
 
             }
@@ -371,31 +470,33 @@ int main()
                 if (dealerSkip)
                 {
                     dealerSkip = false;
+
                     addLog("Dealer skipped turn");
                 }
+
                 else
                 {
 
-                    dealerSpeak(gen);
+                    dealerUseItem(dealer, magazine, gen, doubleDamage);
 
-                    bool attack = dealerAI(magazine);
+                    bool attack = dealerShouldShootPlayer(magazine);
 
                     if (attack)
                     {
                         addLog("Dealer shoots player");
+
                         shoot(player, magazine, doubleDamage);
                     }
                     else
                     {
                         addLog("Dealer shoots himself");
+
                         shoot(dealer, magazine, doubleDamage);
                     }
 
                 }
 
             }
-
-            doubleDamage = false;
 
             playerTurn = !playerTurn;
 
